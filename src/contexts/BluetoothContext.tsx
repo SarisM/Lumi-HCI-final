@@ -31,8 +31,8 @@ const ARDUINO_SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
 const ARDUINO_CHARACTERISTIC_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
 
 export function BluetoothProvider({ children }: { children: ReactNode }) {
-  const [device, setDevice] = useState<BluetoothDevice | null>(null);
-  const [characteristic, setCharacteristic] = useState<BluetoothRemoteGATTCharacteristic | null>(null);
+  const [device, setDevice] = useState<any | null>(null);
+  const [characteristic, setCharacteristic] = useState<any | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [deviceName, setDeviceName] = useState<string | null>(null);
@@ -86,29 +86,21 @@ export function BluetoothProvider({ children }: { children: ReactNode }) {
     try {
       await requestNotificationPermission().catch(console.debug);
 
-      console.log("Buscando dispositivo Arduino Nado...");
-      // First try: request devices that advertise the Arduino service
-      let selectedDevice: BluetoothDevice | undefined;
-      try {
-        selectedDevice = await (navigator as any).bluetooth.requestDevice({
-          filters: [{ services: [ARDUINO_SERVICE_UUID] }],
-          optionalServices: [ARDUINO_SERVICE_UUID],
-        });
-      } catch (e) {
-        // On some mobile browsers or device setups the filtered request may fail to find devices.
-        // Fall back to a more permissive request but still ask for the service in optionalServices.
-        console.debug("Filtered request failed, falling back to acceptAllDevices if allowed:", e);
-        selectedDevice = await (navigator as any).bluetooth.requestDevice({
-          acceptAllDevices: true,
-          optionalServices: [ARDUINO_SERVICE_UUID],
-        });
-      }
+      console.log("Buscando dispositivos BLE (aceptando todos los dispositivos)...");
 
-      console.log("Dispositivo encontrado:", selectedDevice.name);
+      // Request any nearby BLE device. We include the Arduino service UUID as an optional
+      // service so that devices exposing it will still be accessible, but we allow the user
+      // to pick any device in case the target doesn't advertise that UUID.
+      const selectedDevice = await (navigator as any).bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [ARDUINO_SERVICE_UUID],
+      });
+
+      console.log("Dispositivo seleccionado:", selectedDevice?.name || selectedDevice?.id);
       if (!selectedDevice) throw new Error("No se seleccionó ningún dispositivo");
 
-      setDevice(selectedDevice as BluetoothDevice);
-      setDeviceName(selectedDevice.name || "Arduino Nado");
+  setDevice(selectedDevice as any);
+  setDeviceName(selectedDevice.name || selectedDevice.id || "Dispositivo BLE");
 
       selectedDevice.addEventListener("gattserverdisconnected", async () => {
         console.log("Dispositivo GATT desconectado, manejador de evento activado");
@@ -136,19 +128,39 @@ export function BluetoothProvider({ children }: { children: ReactNode }) {
       const server = await selectedDevice.gatt?.connect();
       if (!server) throw new Error("No se pudo conectar al servidor GATT");
 
-      // Get the BLE service
-      const service = await server.getPrimaryService(ARDUINO_SERVICE_UUID);
-      if (!service) throw new Error("No se encontró el servicio BLE");
+      // Try to find the Arduino-specific service/characteristic first. If it's not present,
+      // iterate the available services and characteristics to find a writable characteristic.
+  let char: any | null = null;
+      try {
+        const service = await server.getPrimaryService(ARDUINO_SERVICE_UUID);
+        char = await service.getCharacteristic(ARDUINO_CHARACTERISTIC_UUID);
+      } catch (e) {
+        console.debug("Servicio/característica Arduino no encontrada, buscando característica escribible...", e);
+        // Fetch all services and search for a writable characteristic
+        const services = await server.getPrimaryServices();
+        for (const svc of services) {
+          try {
+            const chars = await svc.getCharacteristics();
+            for (const c of chars) {
+              if (c.properties.write || c.properties.writeWithoutResponse) {
+                char = c;
+                break;
+              }
+            }
+            if (char) break;
+          } catch (innerErr) {
+            console.debug("Error iterating characteristics for service", svc.uuid, innerErr);
+          }
+        }
+      }
 
-      // Get the characteristic for sending commands
-      const char = await service.getCharacteristic(ARDUINO_CHARACTERISTIC_UUID);
-      if (!char) throw new Error("No se encontró la característica BLE");
+      if (!char) throw new Error("No se encontró una característica escribible en el dispositivo BLE");
 
       // Enable notifications if the characteristic supports it
       if (char.properties.notify) {
         await char.startNotifications();
         char.addEventListener('characteristicvaluechanged', (event: Event) => {
-          const val = (event.target as BluetoothRemoteGATTCharacteristic).value;
+          const val = (event.target as any).value;
           if (val) {
             console.log('Received value from Arduino:', new Uint8Array(val.buffer));
           }
