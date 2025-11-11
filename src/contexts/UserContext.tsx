@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import { supabase } from "../utils/supabase/client";
 import { debugLog, debugError, debugWarn } from "../utils/debug";
+import { showNotification } from "../utils/pwa";
 
 interface UserProfile {
   name: string;
@@ -385,6 +386,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       setWaterGlasses(data.waterGlasses);
       debugLog('UserContext', 'Water added successfully:', data.waterGlasses);
+      try {
+        await showNotification('Hidratación registrada', {
+          body: `¡Has registrado ${glasses} vaso(s) de agua! Llevas ${data.waterGlasses} hoy.`,
+          tag: 'hydration-logged',
+          data: { url: '/hydration' },
+        });
+      } catch (e) {
+        console.debug('Notification failed after addWater:', e);
+      }
     } catch (error) {
       debugError('UserContext', 'Error adding water:', error);
     }
