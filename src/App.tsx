@@ -12,7 +12,7 @@ import { HydrationAlertScreen } from "./pages/HydrationAlertScreen";
 import { Home, Apple, User } from "lucide-react";
 import { UserProvider, useUser } from "./contexts/UserContext";
 import { BluetoothProvider } from "./contexts/BluetoothContext";
-import { registerServiceWorker, initPWAInstallPrompt } from "./utils/pwa";
+import { initPWAInstallPrompt } from "./utils/pwa";
 import NotificationPermissionPrompt from "./components/NotificationPermissionPrompt";
 
 type Screen = "auth" | "onboarding" | "profile" | "bluetooth" | "dashboard" | "nutrition" | "userprofile" | "hydration-alert";
@@ -321,10 +321,8 @@ function AppContent() {
 
 export default function App() {
   useEffect(() => {
-    // Register service worker for PWA functionality
-    registerServiceWorker();
-    
-    // Initialize PWA install prompt
+    // Service worker registration disabled (server-side push). Initialize
+    // install prompt only.
     initPWAInstallPrompt((canInstall) => {
       if (canInstall) {
         console.log('✨ Lumi can be installed as a PWA!');

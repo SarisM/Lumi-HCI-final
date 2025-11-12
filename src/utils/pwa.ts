@@ -3,36 +3,13 @@
 import { debugLog, debugError } from "./debug";
 
 export function registerServiceWorker() {
-  // Register the service worker as early as possible. Previously we waited for the
-  // `load` event — that causes some environments to never register if the app is
-  // initialized after load. Register immediately and fall back to waiting for load
-  // only if registration throws.
-  if ('serviceWorker' in navigator) {
-    const doRegister = async () => {
-      try {
-        const registration = await navigator.serviceWorker.register('/sw.js');
-        debugLog('ServiceWorker', 'Service Worker registered successfully:', registration.scope);
-
-        // Check for updates periodically
-        setInterval(() => {
-          try {
-            registration.update();
-          } catch (e) {
-            debugError('ServiceWorker', 'Error updating service worker:', e);
-          }
-        }, 60000); // Check every minute
-      } catch (error) {
-        debugError('ServiceWorker', 'Service Worker registration failed, will retry on load:', error);
-        // Retry registration on load if immediate registration failed
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch((err) => debugError('ServiceWorker', 'Retry registration failed:', err));
-        });
-      }
-    };
-
-    // Fire-and-forget registration
-    void doRegister();
-  }
+  // Service worker registration has been disabled.
+  // Reason: server-side push via Supabase Edge Function + Expo/FCM will be used
+  // for reliable mobile notifications. The previous client-side service worker
+  // was causing persistent installation errors (cache.addAll failures) and
+  // blocking notification delivery. Keeping registration in code causes the
+  // browser to repeatedly try and fail to install the SW, so we disable it here.
+  debugLog('ServiceWorker', 'registerServiceWorker() called but service worker registration is disabled (server-side push enabled)');
 }
 
 export interface BeforeInstallPromptEvent extends Event {
@@ -115,25 +92,10 @@ export async function showNotification(title: string, options?: NotificationOpti
 
     // Try to use service worker registration to show notification (works
     // even when page is in background). Fallback to new Notification.
-    if ('serviceWorker' in navigator) {
-      let reg = await navigator.serviceWorker.getRegistration();
-      if (!reg) {
-        // Try to (re)register the service worker if not present
-        try {
-          debugLog('PWA', 'No service worker registration found - attempting to register');
-          reg = await navigator.serviceWorker.register('/sw.js');
-          debugLog('PWA', 'Service worker registered during notification flow:', reg.scope);
-        } catch (e) {
-          debugError('PWA', 'Failed to register service worker during notification flow:', e);
-        }
-      }
-
-      if (reg && reg.showNotification) {
-        debugLog('PWA', 'Showing notification via ServiceWorker:', title, options);
-        await reg.showNotification(title, options || {});
-        return;
-      }
-    }
+    // Service worker disabled - show notifications directly via Notification
+    // constructor. This means notifications will only appear while the page
+    // is in the foreground or when the browser permits them (no background SW).
+    debugLog('PWA', 'Service worker disabled; using Notification constructor for:', title, options);
 
     // Fallback to the Notification constructor when service worker isn't available
     debugLog('PWA', 'Showing notification via Notification constructor:', title, options);
