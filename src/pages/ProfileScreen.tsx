@@ -15,11 +15,11 @@ export function ProfileScreen({ onReconnectBluetooth, onLogout }: ProfileScreenP
   const { isConnected, deviceName, connect, disconnect } = useBluetooth();
   
   const handleLogout = async () => {
-    // Log logout event before clearing session
+    // Log logout event before clearing session (non-blocking)
     if (userId && accessToken) {
       try {
         const { logUserEvent } = await import("../utils/analytics");
-        await logUserEvent(userId, accessToken, "profile_updated", {
+        void logUserEvent(userId, accessToken, "profile_updated", {
           action: "logout",
         });
       } catch (error) {

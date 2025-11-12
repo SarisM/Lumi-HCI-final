@@ -102,9 +102,9 @@ export function DashboardScreen() {
     setIsAddingWater(true);
     await addWater(1);
     
-    // Log hydration event
+    // Log hydration event (fire-and-forget to avoid blocking UI and to tolerate network failures/adblockers)
     if (userId && accessToken) {
-      await logUserEvent(userId, accessToken, "hydration_logged", {
+      void logUserEvent(userId, accessToken, "hydration_logged", {
         glasses: 1,
         totalGlasses: waterGlasses + 1,
         percentage: nutritionalNeeds 

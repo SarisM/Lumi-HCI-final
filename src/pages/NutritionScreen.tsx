@@ -39,13 +39,13 @@ export function NutritionScreen() {
   const updateProtein = async (meal: "breakfast" | "lunch" | "dinner", value: number) => {
     updateMealIntake(meal, { ...mealIntakes[meal], protein: value });
     
-    // Log meal event
+    // Log meal event (non-blocking)
     if (userId && accessToken) {
       const mealData = { ...mealIntakes[meal], protein: value };
       const isBalanced = mealData.protein >= nutritionalNeeds.proteinPerMeal && 
                         mealData.fiber >= nutritionalNeeds.fiberPerMeal;
-      
-      await logUserEvent(userId, accessToken, "meal_logged", {
+
+      void logUserEvent(userId, accessToken, "meal_logged", {
         meal,
         protein: value,
         fiber: mealData.fiber,
@@ -57,13 +57,13 @@ export function NutritionScreen() {
   const updateFiber = async (meal: "breakfast" | "lunch" | "dinner", value: number) => {
     updateMealIntake(meal, { ...mealIntakes[meal], fiber: value });
     
-    // Log meal event
+    // Log meal event (non-blocking)
     if (userId && accessToken) {
       const mealData = { ...mealIntakes[meal], fiber: value };
       const isBalanced = mealData.protein >= nutritionalNeeds.proteinPerMeal && 
                         mealData.fiber >= nutritionalNeeds.fiberPerMeal;
-      
-      await logUserEvent(userId, accessToken, "meal_logged", {
+
+      void logUserEvent(userId, accessToken, "meal_logged", {
         meal,
         protein: mealData.protein,
         fiber: value,
