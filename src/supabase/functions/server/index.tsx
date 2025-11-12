@@ -298,6 +298,27 @@ app.post("/make-server-7e221a31/hydration/:userId", async (c) => {
 
     await kv.set(key, dailyData);
 
+    // Attempt to insert a notification row into the Postgres notifications table
+    // so a Database Webhook can trigger server-side push delivery.
+    try {
+      const notif = {
+        user_id: userId,
+        title: 'Hidratación registrada',
+        body: `¡Has registrado ${glasses} vaso(s) de agua! Llevas ${dailyData.waterGlasses} hoy.`,
+        data: { waterGlasses: dailyData.waterGlasses },
+        created_at: new Date().toISOString(),
+      } as any;
+
+      const { error: notifErr } = await supabase.from('notifications').insert([notif]);
+      if (notifErr) {
+        console.error('Failed to insert notification row:', notifErr);
+      } else {
+        console.log('Inserted notification row for user', userId);
+      }
+    } catch (insertError) {
+      console.error('Exception while inserting notification row:', insertError);
+    }
+
     return c.json({ success: true, waterGlasses: dailyData.waterGlasses });
   } catch (error) {
     console.log("Error adding water consumption:", error);
