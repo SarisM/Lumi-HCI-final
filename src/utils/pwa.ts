@@ -3,22 +3,35 @@
 import { debugLog, debugError } from "./debug";
 
 export function registerServiceWorker() {
+  // Register the service worker as early as possible. Previously we waited for the
+  // `load` event — that causes some environments to never register if the app is
+  // initialized after load. Register immediately and fall back to waiting for load
+  // only if registration throws.
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then((registration) => {
-          debugLog('ServiceWorker', 'Service Worker registered successfully:', registration.scope);
+    const doRegister = async () => {
+      try {
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        debugLog('ServiceWorker', 'Service Worker registered successfully:', registration.scope);
 
-          // Check for updates periodically
-          setInterval(() => {
+        // Check for updates periodically
+        setInterval(() => {
+          try {
             registration.update();
-          }, 60000); // Check every minute
-        })
-        .catch((error) => {
-          debugError('ServiceWorker', 'Service Worker registration failed:', error);
+          } catch (e) {
+            debugError('ServiceWorker', 'Error updating service worker:', e);
+          }
+        }, 60000); // Check every minute
+      } catch (error) {
+        debugError('ServiceWorker', 'Service Worker registration failed, will retry on load:', error);
+        // Retry registration on load if immediate registration failed
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch((err) => debugError('ServiceWorker', 'Retry registration failed:', err));
         });
-    });
+      }
+    };
+
+    // Fire-and-forget registration
+    void doRegister();
   }
 }
 
@@ -103,14 +116,27 @@ export async function showNotification(title: string, options?: NotificationOpti
     // Try to use service worker registration to show notification (works
     // even when page is in background). Fallback to new Notification.
     if ('serviceWorker' in navigator) {
-      const reg = await navigator.serviceWorker.getRegistration();
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        // Try to (re)register the service worker if not present
+        try {
+          debugLog('PWA', 'No service worker registration found - attempting to register');
+          reg = await navigator.serviceWorker.register('/sw.js');
+          debugLog('PWA', 'Service worker registered during notification flow:', reg.scope);
+        } catch (e) {
+          debugError('PWA', 'Failed to register service worker during notification flow:', e);
+        }
+      }
+
       if (reg && reg.showNotification) {
+        debugLog('PWA', 'Showing notification via ServiceWorker:', title, options);
         await reg.showNotification(title, options || {});
         return;
       }
     }
 
-    // Fallback
+    // Fallback to the Notification constructor when service worker isn't available
+    debugLog('PWA', 'Showing notification via Notification constructor:', title, options);
     // eslint-disable-next-line no-new
     new Notification(title, options);
   } catch (err) {
